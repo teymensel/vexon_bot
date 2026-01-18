@@ -1,0 +1,19 @@
+{
+    "name": "@marpelinamk/database",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc -w"
+    },
+    "dependencies": {
+        "@prisma/client": "^5.10.2"
+    },
+    "devDependencies": {
+        "prisma": "^5.10.2",
+        "typescript": "^5.0.0",
+        "ts-node": "^10.9.1",
+        "@types/node": "^20.0.0"
+    }
+}
