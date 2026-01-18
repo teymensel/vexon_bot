@@ -62,10 +62,13 @@ export class AudioRecorder {
             });
 
             // Pipeline: Opus Stream -> Decoder -> FFmpeg Stdin
-            pipeline(opusStream, opusDecoder, ffmpegProcess.stdin, (err) => {
+            pipeline(opusStream, opusDecoder, ffmpegProcess.stdin, (err: any) => {
                 if (err) {
+                    // Ignore premature close errors as they are expected when we manually destroy the stream (timeout)
+                    if (err.code === 'ERR_STREAM_PREMATURE_CLOSE' || err.code === 'ERR_STREAM_DESTROYED') {
+                        return;
+                    }
                     console.error('Pipeline failed:', err);
-                    // reject(err) // Don't reject here instantly, let ffmpeg close handle it or destroy streams
                 }
             });
 

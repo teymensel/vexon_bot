@@ -1,19 +1,19 @@
 
-import { Message, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { PrefixDb } from '../utils/prefixDb';
 
 export default {
-    data: {
-        name: 'help',
-    },
-    async execute(message: Message, args: string[]) {
-        const client = message.client as any;
+    data: new SlashCommandBuilder()
+        .setName('help')
+        .setDescription('Botun yardım menüsünü ve komutlarını gösterir.'),
+
+    async execute(interaction: ChatInputCommandInteraction) {
+        const client = interaction.client as any;
         const botIndex = client.botIndex;
+        // Slash commands don't rely on prefix input, but we show the prefix for text commands usage
+        const prefix = PrefixDb.getPrefix(interaction.guildId || '', botIndex);
 
 
-
-        // Fetch prefix dynamically here too to ensure accuracy
-        const prefix = PrefixDb.getPrefix(message.guild?.id || '', botIndex);
 
         const embed = new EmbedBuilder().setTimestamp();
 
@@ -33,7 +33,7 @@ export default {
             // Valorica Assistant - Mod & Support
             embed.setColor('#ED4245') // Red
                 .setTitle('🛡️ Valorica Asistan')
-                .setDescription(`Sunucu güvenliği ve düzeni benden sorulur.\nTicket sistemi ve moderasyon araçları için buradayım.\n\n**Komutlarım (` + prefix + `):**`)
+                .setDescription(`Sunucu güvenliği ve düzeni benden sorulur.\nTicket sistemi ve moderasyon araçları için buradayım.\n**Slash Komutları:** \`/ticket-setup\`, \`/ticket-config\`\n\n**Komutlarım (` + prefix + `):**`)
                 .addFields(
                     { name: '👮 Moderasyon', value: `\`${prefix}ban\`, \`${prefix}kick\`, \`${prefix}mute\`, \`${prefix}sil\`, \`${prefix}lock\`, \`${prefix}nuke\``, inline: false },
                     { name: '🎫 Ticket', value: `\`/ticket-setup\`, \`/ticket-config\``, inline: false },
@@ -52,7 +52,7 @@ export default {
             // Security - Guardian
             embed.setColor('#000000') // Black
                 .setTitle('🔒 Bot Guardian')
-                .setDescription(`Sistem Koruması Aktif.\nİzinsiz bot girişlerini engellerim.\n\n**Komutlarım (` + prefix + `):**`)
+                .setDescription(`Sistem Koruması Aktif.\nİzinsiz bot girişlerini engellerim.\n**Slash Komutları:** \`/bot-kanal\`, \`/ai-kanal\`\n\n**Komutlarım (` + prefix + `):**`)
                 .addFields(
                     { name: '🛡️ Güvenlik', value: `\`${prefix}logkur\`, \`${prefix}bot-whitelist\`, \`/bot-kanal\`, \`/ai-kanal\``, inline: false }
                 );
@@ -61,8 +61,8 @@ export default {
         }
 
         // Common footer
-        embed.setFooter({ text: 'Valorica Bot Systems • v2.1', iconURL: message.guild?.iconURL() || undefined });
+        embed.setFooter({ text: 'Valorica Bot Systems • v2.1', iconURL: interaction.guild?.iconURL() || undefined });
 
-        await message.reply({ embeds: [embed] });
+        await interaction.reply({ embeds: [embed] });
     }
 };

@@ -1,0 +1,89 @@
+{
+  "1456319350397993134": {
+    "whitelistIds": [],
+    "enabled": false,
+    "limits": {
+      "ban": {
+        "enabled": false,
+        "limit": 3,
+        "action": "log"
+      },
+      "kick": {
+        "enabled": false,
+        "limit": 3,
+        "action": "log"
+      },
+      "channelCreate": {
+        "enabled": false,
+        "limit": 3,
+        "action": "log"
+      },
+      "channelDelete": {
+        "enabled": false,
+        "limit": 3,
+        "action": "log"
+      },
+      "roleCreate": {
+        "enabled": false,
+        "limit": 3,
+        "action": "log"
+      },
+      "roleDelete": {
+        "enabled": false,
+        "limit": 3,
+        "action": "log"
+      },
+      "webhook": {
+        "enabled": false,
+        "action": "log"
+      },
+      "botAdd": {
+        "enabled": false,
+        "action": "kick"
+      }
+    },
+    "chat": {
+      "spam": {
+        "enabled": false,
+        "limit": 5
+      },
+      "caps": {
+        "enabled": false,
+        "percentage": 70
+      },
+      "link": {
+        "enabled": false,
+        "allowWhiteList": true
+      },
+      "invite": {
+        "enabled": false
+      },
+      "emoji": {
+        "enabled": false,
+        "limit": 10
+      },
+      "mention": {
+        "enabled": false,
+        "limit": 5
+      },
+      "badWords": {
+        "enabled": false,
+        "words": []
+      },
+      "scam": {
+        "enabled": true
+      }
+    },
+    "raid": {
+      "enabled": false,
+      "minAccountAge": 7,
+      "quarantine": {
+        "enabled": false
+      },
+      "autoSlowmode": {
+        "enabled": false,
+        "threshold": 10
+      }
+    }
+  }
+}
