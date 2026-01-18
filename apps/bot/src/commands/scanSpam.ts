@@ -104,7 +104,11 @@ export default {
                     `📨 **İncelenen Mesaj:** ${scannedMessagesCount}\n` +
                     `⚠️ **Tespit Edilen Risk:** ${suspects.size}`
                 );
-                await statusMsg.edit({ embeds: [statusEmbed] }); // Edit specific msg object
+                try {
+                    await statusMsg.edit({ embeds: [statusEmbed] });
+                } catch (err) {
+                    console.log('Status message update failed (probably deleted), ignoring.');
+                }
             }
 
             let lastId: string | undefined = undefined;
@@ -281,13 +285,21 @@ export default {
                     smartExample = msg ? (msg.content.substring(0, 60) + (msg.content.length > 60 ? '...' : '')) : '[İçerik Yok]';
                 }
 
+                // Fix: Truncate smartExample further if needed
+                if (smartExample.length > 300) smartExample = smartExample.substring(0, 300) + '...';
+
                 // Link Preview (Last 3 risk messages or distinct channels)
                 const distinctChannels = new Set(data.messages.map(m => m.channelName)).size;
                 const linkList = data.messages.slice(-3).map((m, idx) => `[Mesaj ${idx + 1}](${m.link})`).join(' • ');
 
+                const fieldVal = `> **Sebep:** ${reasonStr}\n> **Yayılım:** ${distinctChannels} Kanal | ${data.messages.length} Mesaj\n> **Mesajlar:** ${linkList}\n> **Örnek:** \`${smartExample.replace(/`/g, '')}\``;
+
+                // Ensure total value length <= 1024
+                const safeFieldVal = fieldVal.length > 1024 ? fieldVal.substring(0, 1021) + '...' : fieldVal;
+
                 resultEmbed.addFields({
                     name: `🔴 SKOR: ${data.score} | <@${userId}>`,
-                    value: `> **Sebep:** ${reasonStr}\n> **Yayılım:** ${distinctChannels} Kanal | ${data.messages.length} Mesaj\n> **Mesajlar:** ${linkList}\n> **Örnek:** \`${smartExample.replace(/`/g, '')}\``
+                    value: safeFieldVal
                 });
                 fieldCount++;
             });

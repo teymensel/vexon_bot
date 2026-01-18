@@ -12,6 +12,8 @@ const prisma = null;
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 process.on('unhandledRejection', (error) => {
     console.error('Unhandled promise rejection:', error);
 });
@@ -46,7 +48,7 @@ for (const file of commandFiles) {
     }
 }
 
-async function createBot(token: string, botName: string) {
+async function createBot(token: string, botName: string, botIndex: number) {
     const client = new BotClient({
         intents: [
             GatewayIntentBits.Guilds,
@@ -128,10 +130,6 @@ async function createBot(token: string, botName: string) {
 
         // Check for '!!sesegel' command
         if (message.content.startsWith('!!sesegel')) {
-            // Logic:
-            // 1. If mentions exist: Only the mentioned bot(s) should join.
-            // 2. If NO mentions exist: All bots should join.
-
             const hasMentions = message.mentions.users.size > 0;
             const isMentioned = client.user && message.mentions.users.has(client.user.id);
 
@@ -142,18 +140,11 @@ async function createBot(token: string, botName: string) {
             if (message.member?.voice.channel) {
                 const voiceChannel = message.member.voice.channel;
 
-                // Permission Check - Use PermissionFlagsBits instead of IntentBits for Permissions
-                const permissions = voiceChannel.permissionsFor(client.user!);
-                // Note: GatewayIntentBits is for Client options, PermissionFlagsBits is for checking permissions
-                // We need to import PermissionFlagsBits
-                // But since we can't easily add import here without messing up file structure, let's assume we have admin or just log error if fail.
-                // Or better, let's just Log it if we can't join.
-
-                // Actually I should correct the import at the top of the file to include PermissionFlagsBits.
-                // For now, I will remove the Intent check to avoid TS error because I haven't imported the right enum.
-                // I will solve this by rely on the Try/Catch block primarily.
-
                 try {
+                    // JITTER ALGORITHM: Random delay between 500ms and 2500ms to prevent API spike
+                    const jitter = Math.floor(Math.random() * 2000) + 500;
+                    await sleep(jitter);
+
                     const connection = joinVoiceChannel({
                         channelId: voiceChannel.id,
                         guildId: message.guild!.id,
@@ -163,7 +154,8 @@ async function createBot(token: string, botName: string) {
 
                     // Wait for the connection to be ready
                     try {
-                        await entersState(connection, VoiceConnectionStatus.Ready, 10000); // 10s timeout
+                        // Increased timeout to 20s for better reliability on bad connections
+                        await entersState(connection, VoiceConnectionStatus.Ready, 20000);
 
                         // Save the channel
                         if (client.user) {
@@ -175,7 +167,7 @@ async function createBot(token: string, botName: string) {
                     } catch (error) {
                         connection.destroy();
                         console.error(`[${botName}] Connection Timeout/Error for ${voiceChannel.name}:`, error);
-                        throw new Error('Bağlantı zaman aşımına uğradı (10sn) - Olası UDP/Firewall sorunu.');
+                        throw new Error('Bağlantı zaman aşımına uğradı (20sn) - Olası UDP/Firewall sorunu.');
                     }
 
                 } catch (error) {
@@ -205,24 +197,72 @@ async function createBot(token: string, botName: string) {
     });
 
     try {
+        // PROFESSIONAL STARTUP: Stagger login to prevent 429 Ratelimits
+        // If we launch multiple bots, delay each by (Index * 2 seconds)
+        const bootDelay = (botIndex - 1) * 2000;
+        if (bootDelay > 0) {
+            console.log(`[${botName}] Waiting ${bootDelay}ms before login to optimize traffic...`);
+            await sleep(bootDelay);
+        }
+
         await client.login(token);
     } catch (error) {
         console.error(`[${botName}] Failed to login:`, error);
     }
 }
 
-// Start Main Bot
-createBot(process.env.DISCORD_TOKEN!, 'Bot 1');
+// --- BOOTSTRAP LOGIC ---
 
-// Start Second Bot
-if (process.env.DISCORD_TOKEN_2) {
-    createBot(process.env.DISCORD_TOKEN_2, 'Bot 2');
+// Helper to get token by number
+function getToken(num: number): string | undefined {
+    if (num === 1) return process.env.DISCORD_TOKEN;
+    if (num === 2) return process.env.DISCORD_TOKEN_2;
+    return process.env[`DISCORD_TOKEN_${num}`];
 }
 
-// Check for more tokens dynamically if needed
-for (let i = 3; i <= 10; i++) {
-    const token = process.env[`DISCORD_TOKEN_${i}`];
-    if (token) {
-        createBot(token, `Bot ${i}`);
+async function main() {
+    // Parse arguments: --bot=1, --bot=2, or --bot=all (default)
+    const args = process.argv.slice(2);
+    let targetBot = 'all';
+
+    args.forEach(arg => {
+        if (arg.startsWith('--bot=')) {
+            targetBot = arg.split('=')[1];
+        }
+    });
+
+    console.log(`Starting System... Target: ${targetBot}`);
+
+    if (targetBot === 'all') {
+        // Start Bot 1
+        if (process.env.DISCORD_TOKEN) createBot(process.env.DISCORD_TOKEN, 'Bot 1', 1);
+
+        // Start Bot 2
+        if (process.env.DISCORD_TOKEN_2) createBot(process.env.DISCORD_TOKEN_2, 'Bot 2', 2);
+
+        // Start Bots 3-10
+        for (let i = 3; i <= 10; i++) {
+            const token = process.env[`DISCORD_TOKEN_${i}`];
+            if (token) {
+                createBot(token, `Bot ${i}`, i);
+            }
+        }
+    } else {
+        // Start Specific Bot
+        const botNum = parseInt(targetBot);
+        if (isNaN(botNum)) {
+            console.error('Invalid bot number');
+            process.exit(1);
+        }
+
+        const token = getToken(botNum);
+        if (!token) {
+            console.error(`Error: Token for Bot ${botNum} not found in .env`);
+            process.exit(1);
+        }
+
+        createBot(token, `Bot ${botNum}`, 1); // Index 1 so it starts immediately
     }
 }
+
+main();
