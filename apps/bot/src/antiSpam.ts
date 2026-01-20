@@ -86,8 +86,8 @@ export async function handleAntiSpam(message: Message) {
             // 1. Timeout
             if (member && member.moderatable) {
                 if (!member.isCommunicationDisabled()) {
-                    // await member.timeout(MUTE_DURATION, `Anti-Spam: ${detectionReason}`);
-                    console.log(`[Anti-Spam] Would accept timeout for ${member.user.tag} (${detectionReason}) but it is DISABLED.`);
+                    await member.timeout(MUTE_DURATION, `Anti-Spam: ${detectionReason}`).catch(e => console.error("Timeout Failed:", e));
+                    // console.log(`[Anti-Spam] Timeout enforced for ${member.user.tag}`);
                 }
             }
 
@@ -124,7 +124,7 @@ export async function handleAntiSpam(message: Message) {
 
             // 3. Alert
             const channel = message.channel as any;
-            const alertMsg = await channel.send(`🛑 <@${userId}> **${detectionReason}** tespit edildi! (Timeout Devre Dışı)`);
+            const alertMsg = await channel.send(`🛑 <@${userId}> **${detectionReason}** tespit edildi! (30sn Susturuldu)`);
             setTimeout(() => alertMsg.delete().catch(() => { }), 5000);
 
             // Reset history

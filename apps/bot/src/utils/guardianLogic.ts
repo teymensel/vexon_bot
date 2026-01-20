@@ -140,9 +140,9 @@ export class GuardianLogic {
 
             if (ageDays < config.raid.minAccountAge) {
                 try {
-                    await member.send(`⛔ Gesabınız çok yeni (${Math.floor(ageDays)} gün). Sunucu güvenliği için en az ${config.raid.minAccountAge} günlük olmalı.`);
+                    await member.send(`⛔ Hesabınız çok yeni (${Math.floor(ageDays)} gün). Sunucu güvenliği için en az ${config.raid.minAccountAge} günlük olmalı.`);
                     await member.kick('Hesap yaşı yetersiz (Anti-Raid)');
-                    this.logAction(member.guild, 'Raid Koruması', `👤 ${member.user.tag} kicklendi.\n👶 Hesap Yaşı: ${ageDays.toFixed(1)} gün`, 'Red');
+                    this.logAction(member.guild, 'Raid Koruması', `👤 ${member.user.tag} sunucudan atıldı.\n👶 Hesap Yaşı: ${ageDays.toFixed(1)} gün`, 'Red');
                     return;
                 } catch (e) {
                     console.error('Kick failed:', e);

@@ -87,14 +87,16 @@ ${relIcon} **Güvenilirlik durumu:** ${relStatusDisplay}
 
             // Welcome Text Logic
             let contentText = `${member} sunucuya giriş yaptı.`;
-            contentText = regConfig.welcomeTextContent
-                .replace(/{kullanıcı}/g, member.toString())
-                .replace(/{sunucu}/g, member.guild.name)
-                .replace(/{üyesayısı}/g, member.guild.memberCount.toString());
+            if (regConfig.welcomeTextContent) {
+                contentText = regConfig.welcomeTextContent
+                    .replace(/{kullanıcı}/g, member.toString())
+                    .replace(/{sunucu}/g, member.guild.name)
+                    .replace(/{üyesayısı}/g, member.guild.memberCount.toString());
 
-            if (contentText.includes('{yetkili}')) {
-                const staffMentions = (regConfig.staffRoleIds || []).map((id: string) => `<@&${id}>`).join(' ');
-                contentText = contentText.replace(/{yetkili}/g, staffMentions);
+                if (contentText.includes('{yetkili}')) {
+                    const staffMentions = (regConfig.staffRoleIds || []).map((id: string) => `<@&${id}>`).join(' ');
+                    contentText = contentText.replace(/{yetkili}/g, staffMentions);
+                }
             }
 
             await channel.send({ content: contentText, embeds: [embed], components: [row] });
