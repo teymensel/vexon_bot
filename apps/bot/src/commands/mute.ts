@@ -29,6 +29,13 @@ export default {
 
         if (isNaN(ms)) return message.reply('⚠️ Geçersiz sayı!');
 
+        if (target.id === message.guild!.ownerId) return message.reply('❌ Sunucu sahibini susturamazsın.');
+        if (message.author.id !== message.guild!.ownerId) {
+            if (target.roles.highest.position >= message.member!.roles.highest.position) {
+                return message.reply('❌ Senin rolün bu kullanıcıyı susturmaya yetmiyor (Rolü senden yüksek veya eşit).');
+            }
+        }
+
         if (!target.moderatable) return message.reply('❌ Bu kullanıcıya zaman aşımı uygulayamam.');
 
         try {

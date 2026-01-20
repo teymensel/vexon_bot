@@ -6,6 +6,8 @@ export class JsonDb<T> {
     private dbPath: string;
     private defaultData: T;
 
+    private cache: T | null = null;
+
     constructor(fileName: string, defaultData: T) {
         this.dbPath = path.resolve(__dirname, '../../data', fileName);
         this.defaultData = defaultData;
@@ -22,10 +24,15 @@ export class JsonDb<T> {
         }
     }
 
-    public read(): T {
+    public read(forceReload = false): T {
+        if (!forceReload && this.cache) {
+            return this.cache;
+        }
+
         try {
             const data = fs.readFileSync(this.dbPath, 'utf-8');
-            return JSON.parse(data) as T;
+            this.cache = JSON.parse(data) as T;
+            return this.cache;
         } catch (error) {
             console.error(`Error reading DB ${this.dbPath}:`, error);
             return this.defaultData;
@@ -33,6 +40,7 @@ export class JsonDb<T> {
     }
 
     public write(data: T): void {
+        this.cache = data; // Update cache immediately
         try {
             fs.writeFileSync(this.dbPath, JSON.stringify(data, null, 2), 'utf-8');
         } catch (error) {
@@ -44,5 +52,9 @@ export class JsonDb<T> {
         const data = this.read();
         callback(data);
         this.write(data);
+    }
+
+    public reload(): void {
+        this.read(true);
     }
 }

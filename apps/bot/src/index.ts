@@ -414,6 +414,20 @@ async function createBot(token: string, botName: string, botIndex: number) {
                 return;
             }
 
+            // AI Rate Limit
+            const now = Date.now();
+            const cooldownAmount = 5000; // 5 seconds
+            const lastChat = (client as any).aiCooldowns?.get(message.author.id);
+
+            if (lastChat && (now - lastChat < cooldownAmount)) {
+                // Silent ignore or react? Silent is better for spam.
+                // Or maybe react with ⏳ once.
+                return;
+            }
+
+            if (!(client as any).aiCooldowns) (client as any).aiCooldowns = new Map();
+            (client as any).aiCooldowns.set(message.author.id, now);
+
             try {
                 // Send typing indicator
                 await message.channel.sendTyping();
@@ -619,7 +633,12 @@ USER_INPUT:
     try {
         // PROFESSIONAL STARTUP: Stagger login to prevent 429 Ratelimits
         // If we launch multiple bots, delay each by (Index * 2 seconds)
-        const bootDelay = (botIndex - 1) * 2000;
+        // Check if we are launching ALL or just ONE.
+        const headerArgs = process.argv.slice(2);
+        const isTargetingSpecific = headerArgs.some(arg => arg.startsWith('--bot=') && !arg.includes('=all'));
+
+        const bootDelay = isTargetingSpecific ? 0 : (botIndex - 1) * 2000;
+
         if (bootDelay > 0) {
             console.log(`[${botName}] Waiting ${bootDelay}ms before login to optimize traffic...`);
             await sleep(bootDelay);

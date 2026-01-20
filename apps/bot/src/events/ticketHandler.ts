@@ -22,25 +22,43 @@ export async function handleTicketInteraction(interaction: Interaction) {
         const ticketId = TicketDb.nextTicketId(guild.id);
         const channelName = `ticket-${ticketId}`;
 
+        // Permission Logic
+        const overwrites: any[] = [
+            {
+                id: guild.roles.everyone.id,
+                deny: [PermissionFlagsBits.ViewChannel],
+            },
+            {
+                id: user.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+            },
+        ];
+
+        // Support Role
+        if (config.supportRoleId) {
+            overwrites.push({
+                id: config.supportRoleId,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+            });
+        }
+
+        // Add roles with "Manage Guild" (Sunucuyu Yönet) permission
+        guild.roles.cache.forEach(role => {
+            if (role.name !== '@everyone' && role.permissions.has(PermissionFlagsBits.ManageGuild)) {
+                // Avoid duplicates if support role is same
+                if (config.supportRoleId === role.id) return;
+                overwrites.push({
+                    id: role.id,
+                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+                });
+            }
+        });
+
         const channel = await guild.channels.create({
             name: channelName,
             type: ChannelType.GuildText,
-            parent: config.category, // Optional
-            permissionOverwrites: [
-                {
-                    id: guild.id,
-                    deny: [PermissionFlagsBits.ViewChannel],
-                },
-                {
-                    id: user.id,
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-                },
-                // Add Support Role permissions if configured
-                ...(config.supportRoleId ? [{
-                    id: config.supportRoleId,
-                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-                }] : [])
-            ],
+            parent: config.category,
+            permissionOverwrites: overwrites,
             topic: `Ticket ID: ${ticketId} | Sahibi: <@${user.id}>`
         });
 

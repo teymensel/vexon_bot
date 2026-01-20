@@ -16,7 +16,10 @@ export default {
         // Send message to the channel
         const channel = interaction.channel as TextChannel;
         if (channel) {
-            await channel.send(message || '.');
+            await channel.send({
+                content: message || '.',
+                allowedMentions: { parse: [] }
+            });
         }
 
         // Reply ephemeral to confirm

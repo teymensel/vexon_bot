@@ -85,6 +85,19 @@ export default {
             return isSlash ? (interaction as ChatInputCommandInteraction).reply({ content: msg, ephemeral: true }) : (interaction as Message).reply(msg);
         }
 
+        // Hierarchy Check
+        if (targetUser.id === guild.ownerId) {
+            const msg = '❌ Sunucu sahibini kayıt edemezsin/değiştiremezsin.';
+            return isSlash ? (interaction as ChatInputCommandInteraction).reply({ content: msg, ephemeral: true }) : (interaction as Message).reply(msg);
+        }
+
+        if (member && member.id !== guild.ownerId) {
+            if (targetUser.roles.highest.position >= member.roles.highest.position) {
+                const msg = '❌ Senden daha yüksek/eşit yetkideki birini kayıt edemezsin.';
+                return isSlash ? (interaction as ChatInputCommandInteraction).reply({ content: msg, ephemeral: true }) : (interaction as Message).reply(msg);
+            }
+        }
+
         // Formatting
         newName = newName.replace(/\b\w/g, l => l.toUpperCase());
 
@@ -103,11 +116,11 @@ export default {
         // 4. Perform Action
         try {
             // Update Name (ensure max 32 chars)
-            await targetUser.setNickname(finalName.substring(0, 32)).catch(e => console.log('Nickname error (manageable):', e.message));
+            await targetUser.setNickname(finalName.substring(0, 32)).catch(e => console.warn('Nickname update failed (likely higher role):', e.message));
 
             // Roles
             if (config.memberRoleIds.length > 0) {
-                await targetUser.roles.add(config.memberRoleIds);
+                await targetUser.roles.add(config.memberRoleIds).catch(e => console.error('Role add failed:', e));
             }
 
             // Unregister Role Removal

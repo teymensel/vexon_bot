@@ -10,6 +10,23 @@ const capsMap = new Map<string, number>();
 // Limits Cache (for events like channelCreate)
 const limitTracker = new Map<string, { count: number, firstEvent: number }>();
 
+// --- MEMORY CLEANUP TASK ---
+setInterval(() => {
+    const now = Date.now();
+    spamMap.forEach((val, key) => {
+        if (now - val.lastMsg > 600000) spamMap.delete(key); // 10 mins
+    });
+    mentionMap.forEach((val, key) => {
+        if (now - val.lastMsg > 600000) mentionMap.delete(key);
+    });
+    capsMap.clear(); // Caps map seems ephemeral, clear periodically
+    limitTracker.forEach((val, key) => {
+        if (now - val.firstEvent > 600000) limitTracker.delete(key);
+    });
+    // LimitMap (inside class) needs cleanup too? It has its own logic but map grows.
+    GuardianLogic.cleanupLimits();
+}, 300000); // Run every 5 mins
+
 export class GuardianLogic {
 
     // --- HELPER: LOGGING ---
@@ -262,6 +279,13 @@ export class GuardianLogic {
 
             await this.checkLimit(guild, entry.executor.id, 'kick');
         }, 1000);
+    }
+
+    static cleanupLimits() {
+        const now = Date.now();
+        this.limitMap.forEach((val, key) => {
+            if (now - val.lastReset > 600000) this.limitMap.delete(key);
+        });
     }
 }
 
