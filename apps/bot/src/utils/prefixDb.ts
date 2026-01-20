@@ -21,8 +21,8 @@ export class PrefixDb {
         // Defaults
         switch (botIndex) {
             case 1: return 'v!';
-            case 2: return 'va!';
-            case 3: return 'vf!';
+            case 2: return 'vf!';
+            case 3: return 'va!';
             case 4: return 'vs!';
             default: return '!';
         }

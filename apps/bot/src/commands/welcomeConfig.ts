@@ -1,6 +1,7 @@
 
-import { Message, PermissionFlagsBits } from 'discord.js';
+import { Message, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import { JsonDb } from '../utils/jsonDb';
+import { PrefixDb } from '../utils/prefixDb';
 
 interface WelcomeConfig {
     [guildId: string]: {
@@ -18,9 +19,8 @@ export default {
         name: 'welcome-config',
     },
     async execute(message: Message, args: string[]) {
-        // Restriction: Only Bot 2
         const client = message.client as any;
-        if (client.botIndex !== 2) return;
+        if (client.botIndex !== 3) return;
 
         // Admin Check
         if (!message.member?.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -28,6 +28,7 @@ export default {
         }
 
         const guildId = message.guild!.id;
+        const prefix = PrefixDb.getPrefix(guildId, 3);
         const subCommand = args[0]?.toLowerCase();
 
         db.update(data => {
@@ -36,12 +37,16 @@ export default {
             }
         });
 
+        const config = db.read()[guildId];
+        const embed = new EmbedBuilder().setColor('#ED4245').setTimestamp();
+
         if (subCommand === 'set-channel') {
             const channel = message.mentions.channels.first();
             const type = args[1]?.toLowerCase(); // 'welcome' or 'goodbye'
 
             if (!channel || (type !== 'welcome' && type !== 'goodbye')) {
-                return message.reply('**Kullanım:** `!welcome-config set-channel <welcome|goodbye> #kanal`');
+                embed.setDescription(`❌ **Hatalı Kullanım!**\nDoğru kullanım: \`${prefix}welcome-config set-channel <welcome|goodbye> #kanal\``);
+                return message.reply({ embeds: [embed] });
             }
 
             db.update(data => {
@@ -49,7 +54,8 @@ export default {
                 else data[guildId].goodbyeChannelId = channel.id;
             });
 
-            return message.reply(`✅ **${type === 'welcome' ? 'Hoş Geldin' : 'Güle Güle'}** kanalı ${channel} olarak ayarlandı!`);
+            embed.setDescription(`✅ **${type === 'welcome' ? 'Hoş Geldin' : 'Güle Güle'}** kanalı ${channel} olarak ayarlandı!`);
+            return message.reply({ embeds: [embed] });
         }
 
         if (subCommand === 'toggle') {
@@ -58,20 +64,30 @@ export default {
                 data[guildId].enabled = !data[guildId].enabled;
                 newState = data[guildId].enabled;
             });
-            return message.reply(`ℹ️ Hoş geldin sistemi **${newState ? 'AÇIK' : 'KAPALI'}** duruma getirildi.`);
+            embed.setDescription(`ℹ️ Hoş geldin sistemi **${newState ? 'AÇIK' : 'KAPALI'}** duruma getirildi.`);
+            return message.reply({ embeds: [embed] });
         }
 
         if (subCommand === 'status') {
-            const config = db.read()[guildId];
-            return message.reply(`**Durum:**
-            - Sistem: **${config.enabled ? 'AÇIK' : 'KAPALI'}**
-            - Hoş Geldin Kanalı: <#${config.welcomeChannelId || 'Ayarlanmamış'}>
-            - Güle Güle Kanalı: <#${config.goodbyeChannelId || 'Ayarlanmamış'}>`);
+            embed.setTitle('Hoş Geldin Sistemi Durumu')
+                .addFields(
+                    { name: 'Sistem Durumu', value: config.enabled ? '✅ Açık' : '❌ Kapalı', inline: true },
+                    { name: 'Hoş Geldin Kanalı', value: config.welcomeChannelId ? `<#${config.welcomeChannelId}>` : 'Ayarlanmamış', inline: true },
+                    { name: 'Güle Güle Kanalı', value: config.goodbyeChannelId ? `<#${config.goodbyeChannelId}>` : 'Ayarlanmamış', inline: true }
+                );
+            return message.reply({ embeds: [embed] });
         }
 
-        return message.reply(`**Hoş Geldin Sistemi Komutları:**
-        - \`!welcome-config set-channel <welcome|goodbye> #kanal\`
-        - \`!welcome-config toggle\`
-        - \`!welcome-config status\``);
+        // Default Help
+        embed.setTitle('👋 Hoş Geldin Sistemi Ayarları')
+            .setDescription(`Aşağıdaki komutları kullanarak sistemi yapılandırabilirsiniz.\nPrefix: **${prefix}**`)
+            .addFields(
+                { name: '📍 Kanal Ayarlama', value: `\`${prefix}welcome-config set-channel welcome #kanal\`\n\`${prefix}welcome-config set-channel goodbye #kanal\`` },
+                { name: '🔄 Aç/Kapat', value: `\`${prefix}welcome-config toggle\`` },
+                { name: '📊 Durum Kontrol', value: `\`${prefix}welcome-config status\`` }
+            )
+            .setFooter({ text: 'Valorica Asistan' });
+
+        return message.reply({ embeds: [embed] });
     }
 };

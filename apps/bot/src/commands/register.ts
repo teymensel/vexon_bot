@@ -1,138 +1,196 @@
-
-import { Message, GuildMember, EmbedBuilder, TextChannel } from 'discord.js';
+import { Message, GuildMember, EmbedBuilder, TextChannel, SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { JsonDb } from '../utils/jsonDb';
+import { RegisterConfig } from './registerConfig'; // Import interface
+import { regDataDb } from './registerInfo'; // Import the new DB
 
-// Reusing interfaces would be better in a shared types file, but keeping local for simplicity in this flow
-interface RegisterConfig {
-    [guildId: string]: {
-        staffRoleIds: string[];
-        memberRoleIds: string[];
-        logChannelId?: string;
-        enabled: boolean;
-        tag?: string;
-    };
-}
+const configDb = new JsonDb<RegisterConfig>('registerConfig.json', {});
 
 interface RegistryStats {
     [guildId: string]: {
         [userId: string]: {
             total: number;
-            male: number; // Placeholder for future
-            female: number; // Placeholder
         }
     }
 }
-
-const configDb = new JsonDb<RegisterConfig>('registerConfig.json', {});
 const statsDb = new JsonDb<RegistryStats>('registryStats.json', {});
 
 export default {
-    data: {
-        name: 'kayıt',
-        description: 'Kullanıcıyı kayıt eder.'
-    },
-    async execute(message: Message, args: string[]) {
-        // Restriction: Only Bot 2 (Valorica)
-        const client = message.client as any;
-        if (client.botIndex !== 2) return;
+    data: new SlashCommandBuilder()
+        .setName('kayıt')
+        .setDescription('Kullanıcıyı kayıt eder.')
+        .addUserOption(option =>
+            option.setName('kullanıcı').setDescription('Kayıt edilecek kullanıcı').setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('isim').setDescription('Yeni isim').setRequired(true)
+        )
+        .addIntegerOption(option =>
+            option.setName('yaş').setDescription('Yaş (Opsiyonel)').setRequired(false)
+        ),
+    async execute(interaction: ChatInputCommandInteraction | Message, args?: string[]) {
+        const client = interaction.client as any;
+        if (client.botIndex !== 3) return;
 
-        const guildId = message.guild!.id;
-        const config = configDb.read()[guildId];
+        const isSlash = interaction instanceof ChatInputCommandInteraction;
+        const guild = interaction.guild!;
+        const member = isSlash ? (interaction as ChatInputCommandInteraction).member as GuildMember : (interaction as Message).member;
+
+        const config = configDb.read()[guild.id];
 
         // 1. Check if System Enabled
         if (!config || !config.enabled) {
-            return message.reply('⚠️ Kayıt sistemi bu sunucuda aktif değil veya ayarlanmamış.');
+            const msg = '⚠️ Kayıt sistemi bu sunucuda aktif değil veya ayarlanmamış.';
+            return isSlash ? (interaction as ChatInputCommandInteraction).reply({ content: msg, ephemeral: true }) : (interaction as Message).reply(msg);
         }
 
-        // 2. Check Auth (Is user Staff?)
-        // If no staff roles set, maybe allow admin only? For now strict check if roles exist.
+        // 2. Check Auth
         if (config.staffRoleIds.length > 0) {
-            const hasStaffRole = message.member?.roles.cache.some(role => config.staffRoleIds.includes(role.id));
-            if (!hasStaffRole && !message.member?.permissions.has('Administrator')) {
-                return message.reply('⛔ Bu komutu kullanmak için kayıt yetkilisi olmalısın!');
+            const hasStaffRole = member?.roles.cache.some(role => config.staffRoleIds.includes(role.id));
+            if (!hasStaffRole && !member?.permissions.has('Administrator')) {
+                const msg = '⛔ Bu komutu kullanmak için kayıt yetkilisi olmalısın!';
+                return isSlash ? (interaction as ChatInputCommandInteraction).reply({ content: msg, ephemeral: true }) : (interaction as Message).reply(msg);
             }
         }
 
-        // 3. Parse Args
-        // Expected: +kayıt <@target> <Name>
-        const targetUser = message.mentions.members?.first();
-        // Name is the rest of strings, standard args parsing removes mentions often, but here args depends on handler
-        // Let's assume standard split: ["<@123>", "Ahmet", "Can"]
-        if (!targetUser) {
-            return message.reply('**Kullanım:** `+kayıt @kullanıcı İsim Yaş` (Yaş opsiyonel)');
+        // 3. Parse Target & Name
+        let targetUser: GuildMember | null = null;
+        let newName = '';
+        let age: string | number | null = null;
+
+        if (isSlash) {
+            const slash = interaction as ChatInputCommandInteraction;
+            targetUser = slash.options.getMember('kullanıcı') as GuildMember;
+            newName = slash.options.getString('isim')!;
+            age = slash.options.getInteger('yaş');
+        } else {
+            // Legacy (+kayıt @user Name Age)
+            const msg = interaction as Message;
+            targetUser = msg.mentions.members?.first() || null;
+            if (!targetUser || !args) {
+                return msg.reply('**Kullanım:** `+kayıt @kullanıcı İsim Yaş`');
+            }
+            // Parse Name/Age from args
+            const params = args.filter(a => !a.startsWith('<@') && !a.endsWith('>'));
+            const lastParam = params[params.length - 1];
+            if (params.length > 1 && !isNaN(Number(lastParam))) {
+                age = lastParam;
+                newName = params.slice(0, -1).join(' ');
+            } else {
+                newName = params.join(' ');
+            }
         }
 
-        // Filter out the mention from args to get the name
-        const nameParts = args.filter(arg => !arg.startsWith('<@') && !arg.endsWith('>'));
-        let newName = nameParts.join(' ');
+        if (!targetUser) {
+            const msg = 'Kullanıcı bulunamadı.';
+            return isSlash ? (interaction as ChatInputCommandInteraction).reply({ content: msg, ephemeral: true }) : (interaction as Message).reply(msg);
+        }
 
-        // Auto Capitalize
+        // Formatting
         newName = newName.replace(/\b\w/g, l => l.toUpperCase());
 
-        if (!newName) {
-            return message.reply('⚠️ Lütfen bir isim belirtin!');
-        }
+        // Append Symbol / Tag
+        let finalName = newName;
+        // Reset base for reconstruction
+        if (age) finalName += ` | ${age}`;
+
+        // Prepend Tag/Symbol
+        // Check user config: Usually "Tag Symbol Name" or "Symbol Name".
+        // Screenshot showed 'Tag: Tag yok', 'Sembol: Sembol yok'.
+        // If they exist:
+        if (config.symbol) finalName = `${config.symbol} ${finalName}`;
+        if (config.tag) finalName = `${config.tag} ${finalName}`;
 
         // 4. Perform Action
         try {
-            // 4.1 Update Nickname
-            // Tag Logic: If tag exists in config, prepend it? User didn't explicitly ask but it's "Professional" standard.
-            // Let's keep it simple: Just name for now explicitly requested.
-            await targetUser.setNickname(newName);
+            // Update Name (ensure max 32 chars)
+            await targetUser.setNickname(finalName.substring(0, 32)).catch(e => console.log('Nickname error (manageable):', e.message));
 
-            // 4.2 Add Roles
+            // Roles
             if (config.memberRoleIds.length > 0) {
                 await targetUser.roles.add(config.memberRoleIds);
             }
 
-            // 4.3 Update Stats
+            // Unregister Role Removal
+            if (config.unregisterRoleIds && config.unregisterRoleIds.length > 0) {
+                await targetUser.roles.remove(config.unregisterRoleIds).catch(e => console.warn("Failed to remove unregister role", e));
+            }
+
+            // Update Stats (Registrar)
+            const registrarId = member!.user.id;
             statsDb.update(data => {
-                if (!data[guildId]) data[guildId] = {};
-                if (!data[guildId][message.author.id]) {
-                    data[guildId][message.author.id] = { total: 0, male: 0, female: 0 };
+                if (!data[guild.id]) data[guild.id] = {};
+                if (!data[guild.id][registrarId]) {
+                    data[guild.id][registrarId] = { total: 0 };
                 }
-                data[guildId][message.author.id].total += 1;
+                data[guild.id][registrarId].total += 1;
+            });
+
+            // Save Registration Data (Target)
+            regDataDb.update(data => {
+                if (!data[guild.id]) data[guild.id] = {};
+                data[guild.id][targetUser!.id] = {
+                    registrarId: registrarId,
+                    registeredAt: Date.now(),
+                    // previousNames could be managed here by pushing current nickname before change?
+                    // For now, simple.
+                };
             });
 
             // 5. Response & Log
-            const stats = statsDb.read()[guildId][message.author.id];
+            const stats = statsDb.read()[guild.id][registrarId];
 
-            // Success Embed to Channel
             const successEmbed = new EmbedBuilder()
-                .setColor('#00ff00') // Success Green
-                .setDescription(`✅ ${targetUser} başarıyla kayıt edildi!
-                
-                📋 **Yeni İsim:** \`${newName}\`
-                🛡️ **Verilen Roller:** ${config.memberRoleIds.map(id => `<@&${id}>`).join(', ')}
-                👤 **Yetkili:** ${message.author}
-                📊 **Toplam Kayıtların:** \`${stats.total}\`
-                `)
-                .setAuthor({ name: 'Kayıt Başarılı', iconURL: message.guild!.iconURL() || undefined });
+                .setColor('#2b2d31')
+                .setAuthor({ name: 'Kayıt Başarılı', iconURL: guild.iconURL() || undefined })
+                .setDescription(`${targetUser} başarıyla kayıt edildi!`);
 
-            message.reply({ embeds: [successEmbed] });
+            if (isSlash) {
+                await (interaction as ChatInputCommandInteraction).reply({ embeds: [successEmbed] });
+            } else {
+                await (interaction as Message).reply({ embeds: [successEmbed] });
+            }
 
             // Log Channel
-            if (config.logChannelId) {
-                const logChannel = message.guild!.channels.cache.get(config.logChannelId) as TextChannel;
+            // Config field rename check: registerLogChannelId vs logChannelId
+            const logChanId = config.registerLogChannelId || (config as any).logChannelId;
+
+            if (logChanId) {
+                const logChannel = guild.channels.cache.get(logChanId) as TextChannel;
                 if (logChannel) {
                     const logEmbed = new EmbedBuilder()
-                        .setColor('#2b2d31')
-                        .setTitle('📝 Kullanıcı Kayıt Edildi')
+                        .setColor('#000000') // Nors Black
+                        .setAuthor({ name: 'Kayıt Yapıldı!', iconURL: guild.iconURL() || undefined })
                         .setThumbnail(targetUser.user.displayAvatarURL())
-                        .addFields(
-                            { name: 'Kullanıcı', value: `${targetUser} (\`${targetUser.id}\`)`, inline: true },
-                            { name: 'Yetkili', value: `${message.author} (\`${message.author.id}\`)`, inline: true },
-                            { name: 'Yeni İsim', value: `\`${newName}\``, inline: true },
-                            { name: 'Toplam Kayıt', value: `\`${stats.total}\``, inline: true }
-                        )
+                        .setDescription(`
+| **Kayıt Bilgileri**
+
+• **Kayıt Edilen Kullanıcı:** ${targetUser}
+• **Kayıt Eden Kullanıcı:** ${member?.user}
+• **Verilen Roller:** ${config.memberRoleIds.map(id => `<@&${id}>`).join(', ')}
+• **Yeni İsim:** \`${finalName}\`
+• **Kayıt Türü :** \`Manuel\`
+`)
+                        .setFooter({ text: `${member?.user.username}, normal kayıt sayın: ${stats.total}`, iconURL: member?.user.displayAvatarURL() })
                         .setTimestamp();
+
                     logChannel.send({ embeds: [logEmbed] });
                 }
             }
 
+            // Welcome Message in Chat
+            if (config.registerMessageChannelId) {
+                const msgChan = guild.channels.cache.get(config.registerMessageChannelId) as TextChannel;
+                if (msgChan) msgChan.send(`Aramıza hoş geldin ${targetUser}!`);
+            }
+
         } catch (error) {
             console.error(error);
-            message.reply('❌ Kayıt işlemi sırasında bir hata oluştu. (Yetkim yetersiz olabilir veya rol hiyerarşisi sorunu)');
+            const err = '❌ Kayıt işlemi sırasında bir hata oluştu.';
+            if (isSlash && !(interaction as ChatInputCommandInteraction).replied) {
+                (interaction as ChatInputCommandInteraction).reply({ content: err, ephemeral: true });
+            } else if (!isSlash) {
+                (interaction as Message).reply(err);
+            }
         }
     }
 };

@@ -4,12 +4,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { PrefixDb } from './utils/prefixDb';
+import { autoResDb } from './commands/autoResponder';
+import { afkDb } from './commands/afk';
 import { ChannelDb } from './utils/channelDb';
+
 // Verify these imports exist or were created (we created PrefixDb)
 import { handleAntiSpam } from './antiSpam';
 import { handleAutoModExecution } from './autoModIntegration';
 import { AnnouncementDb } from './utils/announcementDb';
 import { VoiceManager } from './utils/voiceManager';
+
 import { generateAIResponse } from './utils/aiService';
 
 // Community Events
@@ -17,16 +21,10 @@ import memberAdd from './events/guildMemberAdd';
 import memberRemove from './events/guildMemberRemove';
 import guardianMemberAdd from './events/guardianMemberAdd';
 import { handleTicketInteraction } from './events/ticketHandler';
+import { handleRegisterInteraction } from './events/registerHandler';
 import { GuardianLogic } from './utils/guardianLogic';
 
-// Community Commands (Manual Import for Prefix handling if needed, or dynamic)
-// Actually we load them dynamically below, but for events we need manual registration
 
-// @ts-ignore
-// import { prisma } from '@marpelinamk/database';
-const prisma = null;
-
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -34,7 +32,11 @@ process.on('unhandledRejection', (error) => {
     console.error('Unhandled promise rejection:', error);
 });
 
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', (error: any) => {
+    if (error.code === 'ENOTFOUND' || error.code === 'ECONNRESET' || error.message.includes('getaddrinfo')) {
+        console.warn('Network Error (Suppressed exit):', error.message);
+        return;
+    }
     console.error('Uncaught exception:', error);
 });
 
@@ -97,8 +99,8 @@ async function createBot(token: string, botName: string, botIndex: number) {
                 const name = cmd.data.name;
 
                 // --- COMMAND FILTERING LOGIC ---
-                // Bot 3 (Assistant): Duyuru, Ticket
-                if (name.startsWith('duyuru') || name.startsWith('ticket')) {
+                // Bot 3 (Assistant): Duyuru, Ticket, Register, Custom Configs, Emoji, Utils, AFK, Server
+                if (name.startsWith('duyuru') || name.startsWith('ticket') || name.startsWith('kayıt') || name === 'özelmesaj' || name === 'isimyaşayarla' || name === 'otoisimayarla' || name === 'emojiekle' || name === 'say' || name === 'selamsistemi' || name === 'afk' || name === 'sunucu' || name === 'prefixler' || name === 'kontrol') {
                     if (botIndex !== 3) return;
                 }
 
@@ -106,8 +108,6 @@ async function createBot(token: string, botName: string, botIndex: number) {
                 if (['bot-kanal', 'ai-kanal', 'logkur', 'bot-whitelist'].includes(name)) {
                     if (botIndex !== 4) return;
                 }
-
-                // Exclude above from others (implied by checks above)
 
                 slashCommands.push(cmd.data.toJSON());
             }
@@ -117,25 +117,19 @@ async function createBot(token: string, botName: string, botIndex: number) {
             const rest = new REST({ version: '10' }).setToken(token);
             try {
                 if (client.user) {
-                    // Register to ALL Guilds for Instant Update (Dev Mode friendly)
                     const guilds = client.guilds.cache.map(guild => guild.id);
                     for (const guildId of guilds) {
-                        await rest.put(
-                            Routes.applicationGuildCommands(client.user.id, guildId),
-                            { body: slashCommands },
-                        );
-                        console.log(`[${botName}] Registered commands to Guild: ${guildId}`);
+                        try {
+                            await rest.put(
+                                Routes.applicationGuildCommands(client.user.id, guildId),
+                                { body: slashCommands },
+                            );
+                            console.log(`[${botName}] Registered commands to Guild: ${guildId}`);
+                        } catch (e) {
+                            console.error(`[${botName}] Failed to register for guild ${guildId}:`, e);
+                        }
                     }
 
-                    // Also Global (for future users)
-                    /* await rest.put(
-                         Routes.applicationCommands(client.user.id),
-                         { body: slashCommands },
-                    ); */
-
-                    console.log(`[${botName}] Successfully registered ${slashCommands.length} slash commands to ${guilds.length} guilds.`);
-
-                    // Set Status
                     client.user.setPresence({
                         activities: [{ name: 'Made by 🖤 Teymensel', type: ActivityType.Playing }],
                         status: 'online'
@@ -153,29 +147,27 @@ async function createBot(token: string, botName: string, botIndex: number) {
                 const now = Date.now();
                 const allData = AnnouncementDb.getAllScheduled();
 
-                allData.forEach(async (guildData) => {
+                allData.forEach(async (guildData: any) => {
                     const guildId = guildData.guildId;
                     const guild = client.guilds.cache.get(guildId);
                     if (!guild) return;
 
                     for (const task of guildData.tasks) {
                         if (task.executeAt <= now) {
-                            // Execute
                             const channel = guild.channels.cache.get(task.channelId);
                             if (channel && channel.isTextBased()) {
                                 try {
-                                    await channel.send(task.content);
+                                    await (channel as any).send(task.content);
                                     console.log(`[Scheduler] Executed task ${task.id} in ${guild.name}`);
                                 } catch (e) {
                                     console.error(`[Scheduler] Failed task ${task.id}`, e);
                                 }
                             }
-                            // Remove
                             AnnouncementDb.removeSchedule(guildId, task.id);
                         }
                     }
                 });
-            }, 60000); // Check every minute
+            }, 60000);
         }
 
         // Auto-join voice channel if saved
@@ -186,12 +178,18 @@ async function createBot(token: string, botName: string, botIndex: number) {
                 const channel = guild.channels.cache.get(savedChannel.channelId);
                 if (channel && channel.isVoiceBased()) {
                     try {
-                        joinVoiceChannel({
+                        const connection = joinVoiceChannel({
                             channelId: channel.id,
                             guildId: guild.id,
                             adapterCreator: guild.voiceAdapterCreator as any,
                             selfDeaf: false,
                         });
+
+                        connection.on('error', (error) => {
+                            console.warn(`[${botName}] Voice Connection Error (Handled):`, error.message);
+                            // Optional: connection.destroy(); 
+                        });
+
                         console.log(`[${botName}] Automatically reconnected to voice channel: ${channel.name}`);
                     } catch (error) {
                         console.error(`[${botName}] Failed to rejoin voice channel:`, error);
@@ -204,12 +202,25 @@ async function createBot(token: string, botName: string, botIndex: number) {
     client.on('interactionCreate', async (interaction: Interaction) => {
         // Handle Ticket Buttons
         if (interaction.isButton()) {
+            if (interaction.customId.startsWith('register')) {
+                await handleRegisterInteraction(interaction);
+                return;
+            }
+
             try {
                 await handleTicketInteraction(interaction);
             } catch (e) {
                 console.error('Ticket Error:', e);
             }
             return;
+        }
+
+        // Handle Modals
+        if (interaction.isModalSubmit()) {
+            if (interaction.customId.startsWith('register')) {
+                await handleRegisterInteraction(interaction);
+                return;
+            }
         }
 
         if (!interaction.isChatInputCommand()) return;
@@ -292,6 +303,8 @@ async function createBot(token: string, botName: string, botIndex: number) {
 
 
         // --- AI Mention Handler ---
+        if (message.mentions.everyone) return; // Ignore @everyone and @here
+
         if (message.mentions.has(client.user!)) {
             // Check if it's a direct mention to THIS bot (and not just a mass mention that includes it)
             // Logic: content contains <@CLIENT_ID>
@@ -300,6 +313,88 @@ async function createBot(token: string, botName: string, botIndex: number) {
             // AI CHANNEL BLACKLIST CHECK
             if (message.guild && !ChannelDb.isAiAllowed(message.guild.id, message.channel.id)) {
                 // AI is disabled in this channel. Ignore.
+                // return; // Don't return yet, check Auto Responder first? 
+                // Actually, user wants "selamsistemi mesaj kısmından...". 
+                // Usually AutoResponder works EVERYWHERE or specific channels? 
+                // Let's assume it works everywhere unless constrained. 
+                // But the AI check `return` blocks AI. 
+                // I will add the AutoResponder check BEFORE this restriction if it should be global, OR inside if it respects AI channel (but "sa" is general).
+                // Let's place it BEFORE the AiAllowed check so "sa" works even if AI is off.
+            }
+
+            // --- LEGACY PREFIX COMMANDS FOR BOT 3 ---
+            if (message.guild && !message.author.bot && botIndex === 3) {
+                const prefix = PrefixDb.getPrefix(message.guild.id, 3) || 'va!';
+                if (message.content.startsWith(prefix)) {
+                    const args = message.content.slice(prefix.length).trim().split(/ +/);
+                    const command = args.shift()?.toLowerCase();
+
+                    console.log(`[Prefix Command] Prefix: ${prefix}, Command: ${command}`); // Debug
+
+                    if (command === 'sunucubilgi') {
+                        const guild = message.guild;
+                        const owner = await guild.fetchOwner().catch(() => null);
+                        const totalMembers = guild.memberCount;
+                        const humans = guild.members.cache.filter(m => !m.user.bot).size;
+                        const bots = totalMembers - humans;
+                        const createdDate = `<t:${Math.floor(guild.createdTimestamp / 1000)}:D> (<t:${Math.floor(guild.createdTimestamp / 1000)}:R>)`;
+
+                        const embed = new EmbedBuilder()
+                            .setColor('#000000')
+                            .setAuthor({ name: `${guild.name} - Sunucu Bilgileri`, iconURL: guild.iconURL() || undefined })
+                            .setThumbnail(guild.iconURL() || null)
+                            .addFields(
+                                { name: '👑 Sunucu Sahibi', value: owner ? `${owner.user.tag} (<@${owner.id}>)` : 'Bilinmiyor', inline: true },
+                                { name: '📅 Kuruluş Tarihi', value: createdDate, inline: true },
+                                { name: '🆔 Sunucu ID', value: guild.id, inline: true },
+                                { name: '👥 Üyeler', value: `Toplam: **${totalMembers}**\nİnsan: **${humans}**\nBot: **${bots}**`, inline: true },
+                                { name: '📊 Boost D.', value: `Sayısı: **${guild.premiumSubscriptionCount || 0}**\nSeviye: **${guild.premiumTier}**`, inline: true }
+                            )
+                            .setFooter({ text: `Valorica Asistan • ${new Date().toLocaleDateString('tr-TR')}` });
+
+                        message.reply({ embeds: [embed] }).catch(() => { });
+                        return;
+                    }
+
+                    if (command === 'owner') {
+                        const owner = await message.guild.fetchOwner().catch(() => null);
+                        const embed = new EmbedBuilder()
+                            .setColor('#000000')
+                            .setTitle('👑 Sunucu Sahibi')
+                            .setDescription(owner ? `Bu sunucunun sahibi: **${owner.user.tag}** (<@${owner.id}>)` : 'Sahip bilgisi çekilemedi.')
+                            .setThumbnail(owner?.user.displayAvatarURL() || null);
+
+                        message.reply({ embeds: [embed] }).catch(() => { });
+                        return;
+                    }
+
+                    if (command === 'help' || command === 'yardım') {
+                        const embed = new EmbedBuilder()
+                            .setColor('#000000')
+                            .setTitle('Valorica Asistan - Yardım')
+                            .setDescription(`Bot komutlarına erişmek için **/help** menüsünü kullanmanız önerilir.\n\n**Prefix Komutları (${prefix}):**\n\`${prefix}sunucubilgi\` - Sunucu istatistikleri\n\`${prefix}owner\` - Sunucu sahibi\n\`${prefix}yardım\` - Bu menü`)
+                            .setFooter({ text: 'Daha fazla özellik için Slash Commands (/) kullanın.' });
+
+                        message.reply({ embeds: [embed] }).catch(() => { });
+                        return;
+                    }
+                }
+            }
+
+            // --- AUTO RESPONDER (Selam Sistemi) ---
+            if (message.guild && !message.author.bot) {
+                const autoConfig = autoResDb.read()[message.guild.id];
+                if (autoConfig && autoConfig.enabled && autoConfig.responses) {
+                    const content = message.content.trim().toLowerCase();
+                    const match = autoConfig.responses.find(r => r.input === content);
+                    if (match) {
+                        message.reply(match.output).catch(() => { });
+                        return; // Stop processing (Don't do AI or Commands if matched)
+                    }
+                }
+            }
+
+            if (message.guild && !ChannelDb.isAiAllowed(message.guild.id, message.channel.id)) {
                 return;
             }
 
@@ -319,54 +414,58 @@ async function createBot(token: string, botName: string, botIndex: number) {
                 return;
             }
 
-            try { // Logic block entry (kept indentation structure)
+            try {
                 // Send typing indicator
                 await message.channel.sendTyping();
 
-                // --- CONTEXT & MEMORY (Recursive Reply Chain) ---
+                // --- GATHER SERVER CONTEXT ---
+                const guild = message.guild!;
+                const owner = await guild.fetchOwner().catch(() => null);
+
+                const roleCount = guild.roles.cache.size;
+                const channelCount = guild.channels.cache.size;
+                const boostCount = guild.premiumSubscriptionCount || 0;
+                const memberCount = guild.memberCount;
+                const ownerName = owner ? (owner.user.globalName || owner.user.username) : 'Bilinmiyor';
+                const guildName = guild.name;
+                const time = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
+
+                // Fetch Channels Details
+                const textChannels = guild.channels.cache.filter(c => c.isTextBased()).map(c => `#${c.name}`).slice(0, 50).join(', '); // Limit to 50
+
+                // Rules Logic
+                let rulesContent = 'Kurallar kanalı bulunamadı veya okunamadı.';
+                const rulesChannel = guild.channels.cache.find(c => c.name.includes('kurallar') || c.name.includes('rules'));
+                if (rulesChannel && rulesChannel.isTextBased()) {
+                    try {
+                        const messages = await rulesChannel.messages.fetch({ limit: 1 });
+                        const lastMsg = messages.first();
+                        if (lastMsg) rulesContent = lastMsg.content || '[Resim/Embed]';
+                    } catch (e) { }
+                }
+
+                // --- CONTEXT & MEMORY (Reply Chain) ---
                 let conversationHistory: string[] = [];
-                let currentMsg: any = message; // Cast to any to avoid strict type issues with fetched messages
+                let currentMsg: any = message;
                 let fetchCount = 0;
-                const MAX_HISTORY = 10; // Remember last 10 replies for deep context
+                const MAX_HISTORY = 10;
 
                 while (currentMsg.reference && currentMsg.reference.messageId && fetchCount < MAX_HISTORY) {
                     try {
                         const refMessage = await message.channel.messages.fetch(currentMsg.reference.messageId);
-
-                        // Format: "User: Message"
                         const authorName = refMessage.author.globalName || refMessage.author.username;
                         const msgContent = refMessage.content || '[Resim/Dosya]';
-
-                        // Prepend to history (Oldest First)
                         conversationHistory.unshift(`- ${authorName}: ${msgContent}`);
-
                         currentMsg = refMessage;
                         fetchCount++;
-                    } catch (err) {
-                        break; // Stop if message deleted or inaccessible
-                    }
+                    } catch (err) { break; }
                 }
 
                 const referencedContent = conversationHistory.length > 0
                     ? `\nGEÇMİŞ MESAJ ZİNCİRİ:\n${conversationHistory.join('\n')}\n(Bu zincire göre cevap ver)`
                     : '';
 
-                // --- SERVER AWARENESS ---
-                const guild = message.guild;
-                let ownerName = 'Bilinmiyor';
-                if (guild) {
-                    try {
-                        const owner = await guild.fetchOwner();
-                        ownerName = owner.displayName; // or owner.user.tag
-                    } catch (e) { /* ignore */ }
-                }
-
-                const time = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
-                const memberCount = guild?.memberCount || '?';
-                const guildName = guild?.name || 'Bilinmiyor';
-
-                // --- PERSONA & SYSTEM PROMPT ---
-                // Enforcing "Flexable v1" identity and Teymensel ownership.
+                // --- SYSTEM PROMPT CONSTRUCTION ---
                 const context = `
 SYSTEM_INSTRUCTIONS:
 - Senin adın: **Flexable v1**.
@@ -375,16 +474,32 @@ SYSTEM_INSTRUCTIONS:
 - Görevin: Valorica sunucusunda kullanıcılara yardımcı olmak.
 - Dil: Türkçe, samimi ve yardımsever.
 
-CURRENT_CONTEXT:
-- Sunucu Adı: ${guildName}
-- Sunucu Sahibi: ${ownerName}
-- Sunucu Üye Sayısı: ${memberCount}
-- Şu Anki Tarih/Saat: ${time}
-- Konuştuğun Kişi: ${message.author.globalName || message.author.username}
+SERVER_INFO:
+- ID: ${guild.id}
+- Adı: ${guildName}
+- Sahibi: ${ownerName}
+- Üye Sayısı: ${memberCount}
+- Kanal Sayısı: ${channelCount}
+- Kanallar (Özet): ${textChannels}
+- Rol Sayısı: ${roleCount}
+- Boost Sayısı: ${boostCount}
+- Tarih: ${time}
+
+IMPORTANT_CONTEXT:
+- SUNUCU KURALLARI (${rulesChannel ? `#${rulesChannel.name}` : 'Yok'}):
+"${rulesContent}"
+
+USER_INFO:
+- ID: ${message.author.id}
+- Kullanıcı Adı: ${message.author.username}
+
+CURRENT_INTERACTION:
+- Kullanıcı: ${message.author.globalName || message.author.username} (ID: ${message.author.id})
 ${referencedContent}
 
 USER_INPUT:
 `;
+
 
                 // Check for images
                 const attachment = message.attachments.first();
@@ -393,7 +508,7 @@ USER_INPUT:
                 const aiResponse = await generateAIResponse(cleanText, context, imageUrl);
                 await message.reply(aiResponse);
             } catch (error) {
-                console.error(`[${botName}] AI Error:`, error);
+                console.error(`[${botName}] AI Error: `, error);
                 await message.reply('Beynim yandı... Birazdan tekrar dener misin? 🔌');
             }
             return; // Stop processing other commands if mentioned
@@ -443,18 +558,18 @@ USER_INPUT:
                         }
 
                         console.log(`[${botName}] Successfully connected to: ${voiceChannel.name} (${voiceChannel.id})`);
-                        await message.reply(`[${botName}] ✅ **${voiceChannel.name}** kanalına başarıyla bağlandım!`);
+                        await message.reply(`[${botName}] ✅ ** ${voiceChannel.name}** kanalına başarıyla bağlandım!`);
                     } catch (error) {
                         connection.destroy();
-                        console.error(`[${botName}] Connection Timeout/Error for ${voiceChannel.name}:`, error);
+                        console.error(`[${botName}] Connection Timeout / Error for ${voiceChannel.name}: `, error);
                         throw new Error('Bağlantı zaman aşımına uğradı (20sn) - Olası UDP/Firewall sorunu.');
                     }
 
                 } catch (error) {
-                    console.error(`[${botName}] Voice Connection Error:`, error);
+                    console.error(`[${botName}] Voice Connection Error: `, error);
                     let errorMsg = 'Bilinmeyen hata';
                     if (error instanceof Error) errorMsg = error.message;
-                    await message.reply(`[${botName}] HATA: Ses kanalına katılamadım. Sebep: \`${errorMsg}\``);
+                    await message.reply(`[${botName}]HATA: Ses kanalına katılamadım.Sebep: \`${errorMsg}\``);
                 }
             } else {
                 await message.reply(`[${botName}] Önce bir ses kanalına katılmalısın!`);

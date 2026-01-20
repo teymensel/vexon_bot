@@ -1,5 +1,5 @@
 
-import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, Message } from 'discord.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -25,7 +25,10 @@ export default {
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-    async execute(interaction: ChatInputCommandInteraction) {
+    async execute(interaction: ChatInputCommandInteraction | Message) {
+        if (interaction instanceof Message || !('deferReply' in interaction)) {
+            return; // Legacy command support not implemented for this slash command
+        }
         const client = interaction.client as any;
         // Verify Bot 3 (Assistant)
         if (client.botIndex !== 3) {

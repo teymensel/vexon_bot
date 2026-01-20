@@ -1,6 +1,8 @@
 import OpenAI from "openai";
+import dotenv from 'dotenv';
+dotenv.config();
 
-const token = "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";
+const token = process.env.OPENROUTER_API_KEY;
 
 const openai = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
@@ -10,9 +12,13 @@ const openai = new OpenAI({
 async function main() {
     console.log("Testing OpenRouter...");
     const models = [
-        "deepseek/deepseek-chat-v3-0324:free",
-        "deepseek/deepseek-r1:free",
-        "meta-llama/llama-4-maverick:free"
+        "google/gemini-2.0-flash-thinking-exp:free",
+        "google/gemini-2.0-flash-exp:free",
+        "google/gemini-exp-1206:free",
+        "meta-llama/llama-3-8b-instruct:free",
+        "microsoft/phi-3-mini-128k-instruct:free",
+        "huggingfaceh4/zephyr-7b-beta:free",
+        "liquid/lfm-40b:free",
     ];
 
     for (const model of models) {

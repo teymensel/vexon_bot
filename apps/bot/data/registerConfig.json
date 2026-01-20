@@ -1,7 +1,30 @@
 {
   "1456319350397993134": {
-    "staffRoleIds": [],
-    "memberRoleIds": [],
-    "enabled": true
+    "staffRoleIds": [
+      "1461442147256631326"
+    ],
+    "memberRoleIds": [
+      "1456687465581773092"
+    ],
+    "enabled": true,
+    "logChannelId": "1461338785852817590",
+    "unregisterRoleIds": [
+      "1461337596822294528"
+    ],
+    "registerMessageChannelId": "1456320545653260342",
+    "registerLogChannelId": "1461338785852817590",
+    "autoName": false,
+    "autoRole": true,
+    "welcomeTag": true,
+    "buttonRegister": true,
+    "nameAgeRequirement": {
+      "name": true,
+      "age": false
+    },
+    "registerChannelId": "1461338785852817590",
+    "symbol": "•",
+    "customWelcomeContent": "<a:cekilis:1463176173403111537> Aramıza Hoşgeldin!",
+    "customWelcomeEnabled": true,
+    "welcomeTextContent": "<:kokentasi:1459859147247059106> Mer hava Dostum Sunucumuza Hoşgeldin\n\n<a:cekilis:1463176173403111537> Kayıt Olmak İçin Nick Vermen Yeterli Kuralları Okumayı Unutma!"
   }
 }

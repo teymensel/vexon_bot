@@ -13,6 +13,7 @@ export async function handleTicketInteraction(interaction: Interaction) {
     if (!guild) return;
 
     if (customId === 'create_ticket') {
+        await interaction.deferReply({ ephemeral: true });
         const config = TicketDb.get(guild.id);
 
         // Prevent spam? (Check if user already has a ticket?) 
@@ -60,7 +61,7 @@ export async function handleTicketInteraction(interaction: Interaction) {
 
         await channel.send({ content: `${user} | <@&${config.supportRoleId || guild.roles.everyone.id}>`, embeds: [embed], components: [row] });
 
-        await interaction.reply({ content: `✅ Biletiniz oluşturuldu: ${channel}`, ephemeral: true });
+        await interaction.editReply({ content: `✅ Biletiniz oluşturuldu: ${channel}` });
     }
 
     if (customId === 'close_ticket') {
