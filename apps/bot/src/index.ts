@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Collection, Interaction, EmbedBuilder, ActivityType, Partials, REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Interaction, EmbedBuilder, ActivityType, Partials, REST, Routes, Events } from 'discord.js';
 import { joinVoiceChannel, entersState, VoiceConnectionStatus } from '@discordjs/voice';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -22,7 +22,10 @@ import memberRemove from './events/guildMemberRemove';
 import guardianMemberAdd from './events/guardianMemberAdd';
 import { handleTicketInteraction } from './events/ticketHandler';
 import { handleRegisterInteraction } from './events/registerHandler';
+// import { Utils } from './utils/utils'; // Removed invalid import
 import { GuardianLogic } from './utils/guardianLogic';
+import { inviteManager } from './utils/inviteManager'; // Added import
+import { statManager } from './utils/statManager';
 
 
 
@@ -84,13 +87,18 @@ async function createBot(token: string, botName: string, botIndex: number) {
             GatewayIntentBits.GuildMembers,
             GatewayIntentBits.AutoModerationExecution,
             GatewayIntentBits.GuildVoiceStates,
+            GatewayIntentBits.GuildInvites, // Required for invite events
         ],
+        partials: [Partials.GuildMember, Partials.User, Partials.Channel], // Required for some events
     }, botName, botIndex);
 
     client.commands = commands;
 
     client.once('ready', async () => {
         console.log(`[${botName}] Logged in as ${client.user?.tag}!`);
+
+        // Initialize Invite Cache
+        await inviteManager.initialize(client);
 
         // --- SLASH COMMAND REGISTRATION ---
         const slashCommands: any[] = [];
@@ -629,6 +637,26 @@ USER_INPUT:
 
 
     });
+
+    // --- INVITE TRACKING ---
+    client.on(Events.InviteCreate, async (invite) => {
+        if (invite.guild) await inviteManager.cacheGuild(invite.guild as any);
+    });
+
+    client.on(Events.InviteDelete, async (invite) => {
+        if (invite.guild) await inviteManager.cacheGuild(invite.guild as any);
+    });
+
+    // --- STAT SYSTEM (Bot 3 Only) ---
+    if (botIndex === 3) {
+        client.on('voiceStateUpdate', (oldState, newState) => {
+            statManager.handleVoiceState(oldState as any, newState as any);
+        });
+
+        client.on('messageCreate', (message) => {
+            statManager.handleMessage(message as any);
+        });
+    }
 
     try {
         // PROFESSIONAL STARTUP: Stagger login to prevent 429 Ratelimits

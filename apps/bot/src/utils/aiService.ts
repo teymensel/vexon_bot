@@ -4,13 +4,12 @@ dotenv.config();
 
 // List of OpenRouter models to try in order (Free tier priority)
 const MODELS_TO_TRY = [
-    "google/gemini-2.0-flash-lite-preview-02-05:free", // Newest Flash Lite
-    "google/gemini-2.0-pro-exp-02-05:free",            // Newest Pro Exp
-    "deepseek/deepseek-r1-distill-llama-70b:free",     // DeepSeek R1 (Very popular)
-    "qwen/qwen-2.5-vl-72b-instruct:free",              // Qwen VL (Vision supported)
-    "meta-llama/llama-3.3-70b-instruct:free",           // Llama 3.3
-    "mistralai/mistral-nemo:free",                       // Mistral Nemo
-    "google/gemini-2.0-flash-exp:free"                   // Fallback Flash
+    "google/gemini-2.0-flash-exp:free",      // Google's latest experimental
+    "google/gemini-exp-1206:free",           // Reliable "Flash" tier
+    "meta-llama/llama-3.3-70b-instruct:free",// Meta Llama 3
+    "mistralai/mistral-7b-instruct:free",    // Mistral 7B (Fast/Free)
+    "microsoft/phi-3-mini-128k-instruct:free", // Phi-3
+    "openchat/openchat-7:free"               // Backup
 ];
 
 // List of Groq models to try as fallback

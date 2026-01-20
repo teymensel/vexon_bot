@@ -1,7 +1,9 @@
 
-import { Events, GuildMember, TextChannel, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { Events, GuildMember, TextChannel, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Collection } from 'discord.js';
 import { JsonDb } from '../utils/jsonDb';
 import { RegisterConfig } from '../commands/registerConfig'; // Type import
+import { InviteDb } from '../utils/inviteDb';
+import { inviteManager } from '../utils/inviteManager';
 
 const configDb = new JsonDb<RegisterConfig>('registerConfig.json', {});
 
@@ -43,9 +45,72 @@ export default {
             targetChannelId = welConfig.welcomeChannelId;
         }
 
-        if (!targetChannelId) return;
+        if (!targetChannelId && !InviteDb.read()[member.guild.id]?.enabled) return;
 
-        const channel = member.guild.channels.cache.get(targetChannelId) as TextChannel;
+        // --- INVITE LOGGER LOGIC ---
+        const invConfig = InviteDb.read()[member.guild.id];
+        if (invConfig && invConfig.enabled && invConfig.channelId) {
+            try {
+                const inviteData = await inviteManager.findInviter(member);
+                const logChannel = member.guild.channels.cache.get(invConfig.channelId) as TextChannel;
+
+                if (logChannel) {
+                    const inviter = inviteData.inviter;
+                    const code = inviteData.code;
+                    let inviteSource = 'Bilinmiyor';
+
+                    if (inviteData.isVanity) inviteSource = 'Özel URL (Vanity)';
+                    else if (inviter) inviteSource = `<@${inviter.id}>`;
+                    else if (code) inviteSource = `Kod: ${code}`;
+
+                    // Update DB with Inviter Map for Leave Logs
+                    InviteDb.update(db => {
+                        if (!db[member.guild.id]) db[member.guild.id] = { enabled: true, channelId: invConfig.channelId, inviterMap: {} };
+                        db[member.guild.id].inviterMap[member.id] = {
+                            inviterId: inviter?.id || null,
+                            code: code || null
+                        };
+                    });
+
+                    // Inviter Invite Count
+                    let inviteCount = 0;
+                    if (inviter) {
+                        const invites = await member.guild.invites.fetch().catch(() => new Collection());
+                        // Simple count of all codes by this inviter
+                        inviteCount = invites.filter((i: any) => i.inviter?.id === inviter.id).reduce((acc: number, val: any) => acc + (val.uses || 0), 0);
+                    }
+
+                    // Format Date
+                    const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                    const logEmbed = new EmbedBuilder()
+                        .setColor('#00ffaa') // Green/Cyan
+                        .setAuthor({ name: 'InviteLogger', iconURL: member.client.user.displayAvatarURL() })
+                        .setTitle(`New member on ${member.guild.name}!`)
+                        .setDescription(`${member} **${inviteData.isVanity ? 'Özel davet' : 'Davet'}** kullanarak sunucuya katıldı!`)
+                        .setThumbnail(member.user.displayAvatarURL());
+
+                    if (inviter) {
+                        logEmbed.setDescription(`${member} joined using **${code}**. Invited by ${inviter} (**${inviteCount}** invites).`);
+                        logEmbed.setFooter({ text: `${dateStr}`, iconURL: inviter.displayAvatarURL() });
+                    } else if (inviteData.isVanity) {
+                        logEmbed.setDescription(`${member} **Özel davet (Vanity: ${code})** kullanarak sunucuya katıldı!`);
+                        logEmbed.setFooter({ text: `${dateStr}` });
+                        // If code is null, fallback
+                        if (!code) logEmbed.setDescription(`${member} **Özel davet (Vanity)** kullanarak sunucuya katıldı!`);
+                    } else {
+                        logEmbed.setDescription(`${member} katıldı. Davet eden bulunamadı.`);
+                        logEmbed.setFooter({ text: `${dateStr}` });
+                    }
+
+                    await logChannel.send({ embeds: [logEmbed] });
+                }
+            } catch (e) {
+                console.error('Invite Log Error:', e);
+            }
+        }
+
+        const channel = member.guild.channels.cache.get(targetChannelId!) as TextChannel;
         if (!channel) return;
 
         try {

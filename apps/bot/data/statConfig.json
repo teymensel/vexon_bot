@@ -1,0 +1,66 @@
+{
+  "1456319350397993134": {
+    "1308499571223035966": {
+      "totalVoiceMs": 0,
+      "totalMessages": 1,
+      "channelStats": {
+        "1456649324942463120": {
+          "voiceMs": 0,
+          "messages": 1
+        }
+      }
+    },
+    "1067135718473863228": {
+      "totalVoiceMs": 0,
+      "totalMessages": 24,
+      "channelStats": {
+        "1456649324942463120": {
+          "voiceMs": 0,
+          "messages": 1
+        },
+        "1460936138113028191": {
+          "voiceMs": 0,
+          "messages": 3
+        },
+        "1456647184362508343": {
+          "voiceMs": 0,
+          "messages": 19
+        },
+        "1456650759147094090": {
+          "voiceMs": 0,
+          "messages": 1
+        }
+      }
+    },
+    "1437064118724071425": {
+      "totalVoiceMs": 0,
+      "totalMessages": 1,
+      "channelStats": {
+        "1456649324942463120": {
+          "voiceMs": 0,
+          "messages": 1
+        }
+      }
+    },
+    "1184510904998572152": {
+      "totalVoiceMs": 0,
+      "totalMessages": 1,
+      "channelStats": {
+        "1456320545653260342": {
+          "voiceMs": 0,
+          "messages": 1
+        }
+      }
+    },
+    "1141090121932865618": {
+      "totalVoiceMs": 0,
+      "totalMessages": 3,
+      "channelStats": {
+        "1456650759147094090": {
+          "voiceMs": 0,
+          "messages": 3
+        }
+      }
+    }
+  }
+}

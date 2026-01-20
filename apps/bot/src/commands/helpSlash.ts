@@ -11,6 +11,9 @@ export default {
         .setDescription('Botun yardım menüsünü ve komutlarını gösterir.'),
 
     async execute(interaction: ChatInputCommandInteraction) {
+        // Guard: Legacy Prefix Handler passes Message object which has .author
+        if ((interaction as any).author) return;
+
         const client = interaction.client as any;
         const botIndex = client.botIndex;
         const prefix = PrefixDb.getPrefix(interaction.guildId || '', botIndex);
@@ -73,7 +76,7 @@ export default {
             .setColor('#000000')
             .setAuthor({ name: 'Valorica Asistan | Yardım', iconURL: interaction.guild?.iconURL() || undefined })
             .setDescription(`
-Merhaba **${interaction.user.username}**! 👋
+Merhaba **${interaction.user?.username || 'Gezgin'}**! 👋
 Ben **Valorica Asistan**. Sunucunuzun kayıt, moderasyon ve eğlence işlerini yönetmek için buradayım.
 
 Aşağıdaki menüyü kullanarak komutlarım hakkında detaylı bilgi alabilirsin.
@@ -125,13 +128,14 @@ Aşağıdaki menüyü kullanarak komutlarım hakkında detaylı bilgi alabilirsi
             'mod': modEmbed
         };
 
+        const originalUserId = interaction.user.id;
         const reply = await interaction.reply({ embeds: [homeEmbed], components: [row] });
 
         // Collector
         const collector = reply.createMessageComponentCollector({
             componentType: ComponentType.StringSelect,
             time: 60000,
-            filter: i => i.user.id === interaction.user.id
+            filter: i => i.user.id === originalUserId
         });
 
         collector.on('collect', async i => {
@@ -142,13 +146,6 @@ Aşağıdaki menüyü kullanarak komutlarım hakkında detaylı bilgi alabilirsi
 
         collector.on('end', () => {
             // Disable menu after timeout
-            /* 
-            const disabledRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-                selectMenu.setDisabled(true)
-            );
-            interaction.editReply({ components: [disabledRow] }).catch(() => {});
-            */
-            // Usually cleaner to just remove components or leave them (will fail on click) 
             interaction.editReply({ components: [] }).catch(() => { });
         });
     }
