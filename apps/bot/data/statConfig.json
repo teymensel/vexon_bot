@@ -12,7 +12,7 @@
     },
     "1067135718473863228": {
       "totalVoiceMs": 0,
-      "totalMessages": 24,
+      "totalMessages": 26,
       "channelStats": {
         "1456649324942463120": {
           "voiceMs": 0,
@@ -29,6 +29,10 @@
         "1456650759147094090": {
           "voiceMs": 0,
           "messages": 1
+        },
+        "1463543190303936553": {
+          "voiceMs": 0,
+          "messages": 2
         }
       }
     },
@@ -59,6 +63,16 @@
         "1456650759147094090": {
           "voiceMs": 0,
           "messages": 3
+        }
+      }
+    },
+    "1326417426543542332": {
+      "totalVoiceMs": 0,
+      "totalMessages": 2,
+      "channelStats": {
+        "1463543190303936553": {
+          "voiceMs": 0,
+          "messages": 2
         }
       }
     }

@@ -108,7 +108,7 @@ async function createBot(token: string, botName: string, botIndex: number) {
 
                 // --- COMMAND FILTERING LOGIC ---
                 // Bot 3 (Assistant): Duyuru, Ticket, Register, Custom Configs, Emoji, Utils, AFK, Server
-                if (name.startsWith('duyuru') || name.startsWith('ticket') || name.startsWith('kayıt') || name === 'özelmesaj' || name === 'isimyaşayarla' || name === 'otoisimayarla' || name === 'emojiekle' || name === 'say' || name === 'selamsistemi' || name === 'afk' || name === 'sunucu' || name === 'prefixler' || name === 'kontrol') {
+                if (name.startsWith('duyuru') || name.startsWith('ticket') || name.startsWith('kayıt') || name === 'özelmesaj' || name === 'isimyaşayarla' || name === 'otoisimayarla' || name === 'emojiekle' || name === 'say' || name === 'selamsistemi' || name === 'afk' || name === 'sunucu' || name === 'prefixler' || name === 'kontrol' || name === 'rolbuton') {
                     if (botIndex !== 3) return;
                 }
 
@@ -215,6 +215,35 @@ async function createBot(token: string, botName: string, botIndex: number) {
                 return;
             }
 
+            // Handle Role Button
+            if (interaction.customId.startsWith('give_role_')) {
+                const roleId = interaction.customId.replace('give_role_', '');
+                const role = interaction.guild?.roles.cache.get(roleId);
+                const member = interaction.member as any;
+
+                if (!role) {
+                    await interaction.reply({ content: '❌ Rol bulunamadı.', ephemeral: true });
+                    return;
+                }
+
+                if (member.roles.cache.has(roleId)) {
+                    try {
+                        await member.roles.remove(role);
+                        await interaction.reply({ content: `➖ **${role.name}** rolü üzerinizden alındı.`, ephemeral: true });
+                    } catch (error) {
+                        await interaction.reply({ content: '❌ Rol alınamadı (Yetki sorunu).', ephemeral: true });
+                    }
+                } else {
+                    try {
+                        await member.roles.add(role);
+                        await interaction.reply({ content: `✅ **${role.name}** rolü size verildi.`, ephemeral: true });
+                    } catch (error) {
+                        await interaction.reply({ content: '❌ Rol verilemedi.', ephemeral: true });
+                    }
+                }
+                return;
+            }
+
             try {
                 await handleTicketInteraction(interaction);
             } catch (e) {
@@ -222,6 +251,9 @@ async function createBot(token: string, botName: string, botIndex: number) {
             }
             return;
         }
+
+
+
 
         // Handle Modals
         if (interaction.isModalSubmit()) {
